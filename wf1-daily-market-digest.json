@@ -1,0 +1,238 @@
+{
+    "name": "WF1 Daily Market Digest -> Telegram/WhatsApp/Email (Research Only)",
+    "nodes": [
+        {
+            "parameters": {
+                "triggerTimes": {
+                    "item": [
+                        {
+                            "mode": "everyDay",
+                            "hour": 8,
+                            "minute": 15
+                        }
+                    ]
+                }
+            },
+            "id": "a1b2c3d4-1111-4a4a-8888-111111111111",
+            "name": "Cron Morning",
+            "type": "n8n-nodes-base.cron",
+            "typeVersion": 1,
+            "position": [
+                220,
+                280
+            ]
+        },
+        {
+            "parameters": {
+                "url": "={{$env.SUPABASE_URL + '/functions/v1/finance-generate-digest'}}",
+                "method": "POST",
+                "sendHeaders": true,
+                "headerParametersUi": {
+                    "parameter": [
+                        {
+                            "name": "Authorization",
+                            "value": "={{'Bearer ' + $env.SUPABASE_SERVICE_ROLE_KEY}}"
+                        },
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "jsonParameters": true,
+                "bodyParametersJson": "={\"org_id\": $env.FINANCE_ORG_ID, \"user_id\": $env.FINANCE_USER_ID, \"period\":\"daily\", \"disclaimer\":\"Research/education only — not financial advice.\"}"
+            },
+            "id": "b2c3d4e5-2222-4b4b-9999-222222222222",
+            "name": "Generate Digest (Supabase)",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4,
+            "position": [
+                520,
+                280
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const res = $json;\nconst title = res.title || 'Daily Market Digest';\nconst body = res.content || res.data?.content || JSON.stringify(res);\nconst msg = `${title}\\n\\n${body}\\n\\nResearch/education only — not financial advice.`;\nreturn [{ json: { title, message: msg } }];"
+            },
+            "id": "c3d4e5f6-3333-4c4c-aaaa-333333333333",
+            "name": "Format Message",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                780,
+                280
+            ]
+        },
+        {
+            "parameters": {
+                "url": "={{'https://api.telegram.org/bot' + $env.TELEGRAM_BOT_TOKEN + '/sendMessage'}}",
+                "method": "POST",
+                "sendHeaders": true,
+                "headerParametersUi": {
+                    "parameter": [
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "jsonParameters": true,
+                "bodyParametersJson": "={\"chat_id\":\"\" + $env.TELEGRAM_CHAT_ID, \"text\": $json.message, \"disable_web_page_preview\": true}"
+            },
+            "id": "d4e5f6a7-4444-4d4d-bbbb-444444444444",
+            "name": "Send Telegram",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4,
+            "position": [
+                1040,
+                140
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "boolean": [
+                        {
+                            "value1": "={{$env.WHATSAPP_ENABLED}}",
+                            "operation": "equal",
+                            "value2": "true"
+                        }
+                    ]
+                }
+            },
+            "id": "e5f6a7b8-5555-4e4e-cccc-555555555555",
+            "name": "IF WhatsApp Enabled",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2,
+            "position": [
+                1040,
+                380
+            ]
+        },
+        {
+            "parameters": {
+                "url": "={{'https://api.twilio.com/2010-04-01/Accounts/' + $env.TWILIO_ACCOUNT_SID + '/Messages.json'}}",
+                "method": "POST",
+                "authentication": "basicAuth",
+                "sendBody": true,
+                "bodyContentType": "form-urlencoded",
+                "bodyParametersUi": {
+                    "parameter": [
+                        {
+                            "name": "From",
+                            "value": "={{$env.WHATSAPP_FROM}}"
+                        },
+                        {
+                            "name": "To",
+                            "value": "={{$env.WHATSAPP_TO}}"
+                        },
+                        {
+                            "name": "Body",
+                            "value": "={{$json.message}}"
+                        }
+                    ]
+                },
+                "options": {},
+                "user": "={{$env.TWILIO_ACCOUNT_SID}}",
+                "password": "={{$env.TWILIO_AUTH_TOKEN}}"
+            },
+            "id": "f6a7b8c9-6666-4f4f-dddd-666666666666",
+            "name": "Send WhatsApp (Twilio)",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4,
+            "position": [
+                1280,
+                380
+            ]
+        },
+        {
+            "parameters": {
+                "fromEmail": "={{$env.EMAIL_FROM}}",
+                "toEmail": "={{$env.DIGEST_EMAIL_TO}}",
+                "subject": "={{$json.title + ' (Research Only)'}}",
+                "text": "={{$json.message}}"
+            },
+            "id": "a7b8c9d0-7777-4a4a-eeee-777777777777",
+            "name": "Send Email (SMTP)",
+            "type": "n8n-nodes-base.emailSend",
+            "typeVersion": 1,
+            "position": [
+                1040,
+                260
+            ],
+            "credentials": {
+                "smtp": {
+                    "name": "SMTP_ENV"
+                }
+            }
+        }
+    ],
+    "connections": {
+        "Cron Morning": {
+            "main": [
+                [
+                    {
+                        "node": "Generate Digest (Supabase)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Generate Digest (Supabase)": {
+            "main": [
+                [
+                    {
+                        "node": "Format Message",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Format Message": {
+            "main": [
+                [
+                    {
+                        "node": "Send Telegram",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Send Email (SMTP)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "IF WhatsApp Enabled",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "IF WhatsApp Enabled": {
+            "main": [
+                [
+                    {
+                        "node": "Send WhatsApp (Twilio)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                []
+            ]
+        }
+    },
+    "active": false,
+    "settings": {
+        "executionTimeout": 300
+    }
+}

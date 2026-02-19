@@ -1,0 +1,180 @@
+{
+    "name": "WF5 Macro Events Calendar -> Reminders (Research Only)",
+    "nodes": [
+        {
+            "parameters": {
+                "triggerTimes": {
+                    "item": [
+                        {
+                            "mode": "everyDay",
+                            "hour": 7,
+                            "minute": 45
+                        }
+                    ]
+                }
+            },
+            "id": "a9a9a9a9-1111-2222-3333-444444444444",
+            "name": "Cron Daily Macro",
+            "type": "n8n-nodes-base.cron",
+            "typeVersion": 1,
+            "position": [
+                220,
+                260
+            ]
+        },
+        {
+            "parameters": {
+                "url": "={{$env.SUPABASE_URL + '/rest/v1/macro_events'}}",
+                "method": "GET",
+                "sendHeaders": true,
+                "headerParametersUi": {
+                    "parameter": [
+                        {
+                            "name": "Authorization",
+                            "value": "={{'Bearer ' + $env.SUPABASE_SERVICE_ROLE_KEY}}"
+                        },
+                        {
+                            "name": "apikey",
+                            "value": "={{$env.SUPABASE_SERVICE_ROLE_KEY}}"
+                        }
+                    ]
+                },
+                "sendQuery": true,
+                "queryParametersUi": {
+                    "parameter": [
+                        {
+                            "name": "event_ts",
+                            "value": "=gte.{{new Date().toISOString()}}"
+                        },
+                        {
+                            "name": "event_ts",
+                            "value": "=lte.{{new Date(Date.now() + 86400000).toISOString()}}"
+                        },
+                        {
+                            "name": "order",
+                            "value": "event_ts.asc"
+                        },
+                        {
+                            "name": "limit",
+                            "value": "10"
+                        }
+                    ]
+                }
+            },
+            "id": "b8b8b8b8-5555-6666-7777-888888888888",
+            "name": "Fetch Events Due (Supabase)",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4,
+            "position": [
+                520,
+                260
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const events = Array.isArray($json) ? $json : [$json];\nif (!events.length || !events[0].title) return [];\nconst lines = events.map(e => `- ${e.title} (${e.event_ts || e.ts})${e.region ? ' [' + e.region + ']' : ''}`);\nconst msg = `Macro Events (Next 24h)\\n\\n${lines.join('\\n')}\\n\\nResearch/education only — not financial advice.`;\nreturn [{ json: { title: 'Macro Events Reminder', message: msg } }];"
+            },
+            "id": "c7c7c7c7-9999-aaaa-bbbb-cccccccccccc",
+            "name": "Format Macro Reminder",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                780,
+                260
+            ]
+        },
+        {
+            "parameters": {
+                "url": "={{'https://api.telegram.org/bot' + $env.TELEGRAM_BOT_TOKEN + '/sendMessage'}}",
+                "method": "POST",
+                "sendHeaders": true,
+                "headerParametersUi": {
+                    "parameter": [
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "jsonParameters": true,
+                "bodyParametersJson": "={\"chat_id\":\"\" + $env.TELEGRAM_CHAT_ID, \"text\": $json.message, \"disable_web_page_preview\": true}"
+            },
+            "id": "d6d6d6d6-dddd-eeee-ffff-000000000000",
+            "name": "Send Telegram Macro",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4,
+            "position": [
+                1040,
+                140
+            ]
+        },
+        {
+            "parameters": {
+                "fromEmail": "={{$env.EMAIL_FROM}}",
+                "toEmail": "={{$env.DIGEST_EMAIL_TO}}",
+                "subject": "={{$json.title + ' (Research Only)'}}",
+                "text": "={{$json.message}}"
+            },
+            "id": "eeeeeeee-1111-2222-3333-444444444444",
+            "name": "Send Email Macro (SMTP)",
+            "type": "n8n-nodes-base.emailSend",
+            "typeVersion": 1,
+            "position": [
+                1040,
+                320
+            ],
+            "credentials": {
+                "smtp": {
+                    "name": "SMTP_ENV"
+                }
+            }
+        }
+    ],
+    "connections": {
+        "Cron Daily Macro": {
+            "main": [
+                [
+                    {
+                        "node": "Fetch Events Due (Supabase)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Fetch Events Due (Supabase)": {
+            "main": [
+                [
+                    {
+                        "node": "Format Macro Reminder",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Format Macro Reminder": {
+            "main": [
+                [
+                    {
+                        "node": "Send Telegram Macro",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Send Email Macro (SMTP)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "active": false,
+    "settings": {
+        "executionTimeout": 300
+    }
+}
