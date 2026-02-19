@@ -1,0 +1,163 @@
+{
+    "name": "WF3 Weekly Portfolio Summary -> Telegram/Email (Research Only)",
+    "nodes": [
+        {
+            "parameters": {
+                "triggerTimes": {
+                    "item": [
+                        {
+                            "mode": "everyWeek",
+                            "weekDay": "sunday",
+                            "hour": 18,
+                            "minute": 30
+                        }
+                    ]
+                }
+            },
+            "id": "7b3a7c8d-3b0e-4cbb-9b3a-1c2d3e4f5a6b",
+            "name": "Cron Weekly",
+            "type": "n8n-nodes-base.cron",
+            "typeVersion": 1,
+            "position": [
+                240,
+                260
+            ]
+        },
+        {
+            "parameters": {
+                "url": "={{$env.SUPABASE_URL + '/functions/v1/finance-generate-digest'}}",
+                "method": "POST",
+                "sendHeaders": true,
+                "headerParametersUi": {
+                    "parameter": [
+                        {
+                            "name": "Authorization",
+                            "value": "={{'Bearer ' + $env.SUPABASE_SERVICE_ROLE_KEY}}"
+                        },
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "jsonParameters": true,
+                "bodyParametersJson": "={\"org_id\": $env.FINANCE_ORG_ID, \"user_id\": $env.FINANCE_USER_ID, \"period\":\"weekly\", \"disclaimer\":\"Research/education only — not financial advice.\"}"
+            },
+            "id": "d9e8f7a6-b5c4-3d2e-1f0a-9b8c7d6e5f4a",
+            "name": "Generate Weekly Summary (Supabase)",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4,
+            "position": [
+                520,
+                260
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const res = $json;\nconst title = res.data?.title || res.title || 'Weekly Portfolio Summary';\nconst body = res.data?.content || res.content || JSON.stringify(res);\nconst msg = `${title}\\n\\n${body}\\n\\nResearch/education only — not financial advice.`;\nreturn [{ json: { title, message: msg } }];"
+            },
+            "id": "a1b2c3d4-e5f6-4789-9abc-def012345678",
+            "name": "Format Weekly Message",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                780,
+                260
+            ]
+        },
+        {
+            "parameters": {
+                "url": "={{'https://api.telegram.org/bot' + $env.TELEGRAM_BOT_TOKEN + '/sendMessage'}}",
+                "method": "POST",
+                "sendHeaders": true,
+                "headerParametersUi": {
+                    "parameter": [
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "jsonParameters": true,
+                "bodyParametersJson": "={\"chat_id\":\"\" + $env.TELEGRAM_CHAT_ID, \"text\": $json.message, \"disable_web_page_preview\": true}"
+            },
+            "id": "11111111-2222-3333-4444-555555555555",
+            "name": "Send Telegram Weekly",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4,
+            "position": [
+                1040,
+                140
+            ]
+        },
+        {
+            "parameters": {
+                "fromEmail": "={{$env.EMAIL_FROM}}",
+                "toEmail": "={{$env.DIGEST_EMAIL_TO}}",
+                "subject": "={{$json.title + ' (Research Only)'}}",
+                "text": "={{$json.message}}"
+            },
+            "id": "66666666-7777-8888-9999-aaaaaaaaaaaa",
+            "name": "Send Email Weekly (SMTP)",
+            "type": "n8n-nodes-base.emailSend",
+            "typeVersion": 1,
+            "position": [
+                1040,
+                320
+            ],
+            "credentials": {
+                "smtp": {
+                    "name": "SMTP_ENV"
+                }
+            }
+        }
+    ],
+    "connections": {
+        "Cron Weekly": {
+            "main": [
+                [
+                    {
+                        "node": "Generate Weekly Summary (Supabase)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Generate Weekly Summary (Supabase)": {
+            "main": [
+                [
+                    {
+                        "node": "Format Weekly Message",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Format Weekly Message": {
+            "main": [
+                [
+                    {
+                        "node": "Send Telegram Weekly",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Send Email Weekly (SMTP)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "active": false,
+    "settings": {
+        "executionTimeout": 300
+    }
+}
